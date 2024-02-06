@@ -78,7 +78,20 @@ def do_add(conn, cursor, tok):
     if s == "":
         print("String must not be empty")
         return
-    cursor.execute("INSERT INTO tasks(project_id, name, column_id) VALUES (?, ?, ?)", [current_project, s, 1])
+    cursor.execute("SELECT id FROM tasks WHERE project_id=? ORDER BY id ASC", [current_project])
+    ids = cursor.fetchall()
+
+    next_id = 1  # Start with 1 as the default
+
+    if ids:
+        for index, (current_id,) in enumerate(ids):
+            if current_id != next_id:  # Gap found
+                break
+            next_id += 1
+
+        if index == len(ids) - 1:  # No gaps found, use the next number after the last ID
+            next_id = ids[-1][0] + 1
+    cursor.execute("INSERT INTO tasks(id, project_id, name, column_id) VALUES (?, ?, ?, ?)", [next_id, current_project, s, 1])
     conn.commit()
     newid = cursor.lastrowid
     print(f"Added task with id {newid} to column 1")
@@ -89,12 +102,25 @@ def do_move(conn, cursor, tok):
     if tok.require_specific_word("to") == None: return
     column_id = tok.require_int()
     if column_id == None: return
-    cursor.execute("""
-        UPDATE tasks SET column_id=?
-        WHERE project_id=? AND id=?
-        """, [column_id, current_project, taskid])
-    conn.commit()
-    print("Moved the task to the new column.")
+    cursor.execute("SELECT 1 FROM tasks WHERE id = ? AND project_id = ?", (taskid, current_project))
+    task_exists = cursor.fetchone()!=None  # True if task exists, False otherwise
+
+    if task_exists:
+        # Check if the new column ID is different from the current one
+        cursor.execute("SELECT column_id FROM tasks WHERE id = ?", (taskid,))
+        current_column_id = cursor.fetchone()["column_id"]
+
+        if column_id != current_column_id:
+            cursor.execute("""
+                UPDATE tasks SET column_id=?
+                WHERE project_id=? AND id=?
+                """, [column_id, current_project, taskid])
+            conn.commit()
+            print("Task moved successfully.")
+        else:
+            print("Task already in the same column.")
+    else:
+        print("Task not found.")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -102,7 +128,7 @@ if __name__ == '__main__':
     args = parser.parse_args()   
     
     conn = sqlite3.connect(args.filename)
-    conn.row_factory = dict_factory
+    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.executescript('''
         -- Create the projects table
@@ -113,14 +139,14 @@ if __name__ == '__main__':
 
         -- Create the columns table
         CREATE TABLE IF NOT EXISTS columns (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          id INTEGER,
           name TEXT NOT NULL,
           project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE
         );
 
         -- Create the tasks table
         CREATE TABLE IF NOT EXISTS tasks (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          id INTEGER PRIMARY KEY,
           name TEXT NOT NULL,
           description TEXT, -- Optional field for longer descriptions
           project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -180,12 +206,13 @@ projects: list the projects
             do_add(conn, cursor, tok)
         elif first_token == "columns":
             cursor.execute(
-                "SELECT c.id as id, c.name AS column_name, COUNT(t.id) AS task_count"
-                " FROM columns AS c"
-                " LEFT JOIN tasks AS t ON c.id = t.column_id"
-                " WHERE c.project_id = ?"
-                " GROUP BY c.id",
-                (current_project,)
+                "SELECT t.column_id AS id, COALESCE(c.name, '') AS column_name, COUNT(t.id) AS task_count"
+                " FROM tasks AS t"
+                " LEFT JOIN columns AS c ON t.column_id = c.id AND c.project_id = ?"
+                " WHERE t.project_id = ?"
+                " GROUP BY t.column_id"
+                " ORDER BY id",  # Optional: Add ordering for clarity
+                (current_project, current_project)
             )
 
             results = cursor.fetchall()
@@ -211,6 +238,8 @@ projects: list the projects
                     print("Deleted the task.")
                 else:
                     print("No task with this id.")
+                conn.commit()
+                cursor.execute("VACUUM")
                 conn.commit()
         elif first_token == "move":
             do_move(conn, cursor, tok)
