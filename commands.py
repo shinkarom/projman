@@ -37,28 +37,33 @@ def do_show(conn, cursor, tok):
 
 def do_add(conn, cursor, tok):
     column_id = tok.require_int()
-    if column_id == None: return
+    if column_id == None: return    
     s = tok.get_string()
     if s == "":
         print("String must not be empty")
         return
+      
+    valid_column_ids = [row[0] for row in cursor.execute("SELECT id FROM columns WHERE project_id = ?", [current_project])]
+    if column_id not in valid_column_ids:
+        print("Error: wrong column")
+        return
+      
     cursor.execute("SELECT id FROM tasks WHERE project_id=? ORDER BY id ASC", [current_project])
     ids = cursor.fetchall()
-
     next_id = 1  # Start with 1 as the default
-
     if ids:
         for index, (current_id,) in enumerate(ids):
             if current_id != next_id:  # Gap found
                 break
             next_id += 1
-
         if index == len(ids) - 1:  # No gaps found, use the next number after the last ID
             next_id = ids[-1][0] + 1
+    
     cursor.execute("INSERT INTO tasks(id, project_id, name, column_id) VALUES (?, ?, ?, ?)", [next_id, current_project, s, column_id])
     conn.commit()
     newid = cursor.lastrowid
-    print(f"Added task with id {newid} to column 1")
+    print(f"Added task with id {newid} to column {column_id}")
+    
 
 def do_move(conn, cursor, tok):
     taskid = tok.require_int()
@@ -87,17 +92,12 @@ def do_move(conn, cursor, tok):
         
 def do_columns(conn, cursor, tok):
     cursor.execute("""
-        SELECT t.column_id AS id,
-            COALESCE(c.name, '') AS column_name,
-            COUNT(t.id) AS task_count
-        FROM tasks AS t
-        LEFT JOIN columns AS c ON t.column_id = c.id AND c.project_id = ?
-        WHERE t.project_id = ?
-        GROUP BY t.column_id
-        HAVING COUNT(t.id) > 0 OR c.name IS NOT NULL
-        ORDER BY id;
+        SELECT c.id AS id, c.name AS column_name,
+        (SELECT COUNT(*) FROM tasks WHERE tasks.column_id = c.id AND tasks.project_id = c.project_id) AS task_count
+        FROM columns c
+        WHERE c.project_id = ?;
         """,
-        (current_project, current_project)
+        (current_project,)
     )
 
     results = cursor.fetchall()

@@ -11,7 +11,7 @@ if __name__ == '__main__':
     conn = sqlite3.connect(args.filename)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    cursor.executescript('''
+    cursor.executescript('''     
         -- Create the projects table
         CREATE TABLE IF NOT EXISTS projects (
           id INTEGER PRIMARY KEY AUTOINCREMENT,

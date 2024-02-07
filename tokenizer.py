@@ -25,7 +25,7 @@ class Tokenizer:
     def require_int(self):
         s = self.get_token()
         if s.isnumeric():
-            return s
+            return int(s)
         else:
             print("Error: integer required, but got", s)
             return None
