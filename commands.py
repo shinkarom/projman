@@ -2,6 +2,10 @@ import sqlite3
 
 current_project = 1
 
+def validate_column_id(cursor, value):
+    valid_ids = [row[0] for row in cursor.execute("SELECT id FROM columns WHERE project_id = ?", [current_project])]
+    return value in valid_ids
+
 def do_help(conn, cursor, tok):
     print("""
     help: show this help
@@ -43,8 +47,7 @@ def do_add(conn, cursor, tok):
         print("String must not be empty")
         return
       
-    valid_column_ids = [row[0] for row in cursor.execute("SELECT id FROM columns WHERE project_id = ?", [current_project])]
-    if column_id not in valid_column_ids:
+    if not validate_column_id(cursor, column_id):
         print("Error: wrong column")
         return
       
@@ -72,23 +75,28 @@ def do_move(conn, cursor, tok):
     if column_id == None: return
     cursor.execute("SELECT 1 FROM tasks WHERE id = ? AND project_id = ?", (taskid, current_project))
     task_exists = cursor.fetchone()!=None  # True if task exists, False otherwise
+    if not task_exists:
+        print("No such task.")
+        return
+        
+    if not validate_column_id(cursor, column_id):
+        print("Error: wrong column")
+        return
+    
+    # Check if the new column ID is different from the current one
+    cursor.execute("SELECT column_id FROM tasks WHERE id = ?", (taskid,))
+    current_column_id = cursor.fetchone()["column_id"]
 
-    if task_exists:
-        # Check if the new column ID is different from the current one
-        cursor.execute("SELECT column_id FROM tasks WHERE id = ?", (taskid,))
-        current_column_id = cursor.fetchone()["column_id"]
-
-        if column_id != current_column_id:
-            cursor.execute("""
-                UPDATE tasks SET column_id=?
-                WHERE project_id=? AND id=?
-                """, [column_id, current_project, taskid])
-            conn.commit()
-            print("Task moved successfully.")
-        else:
-            print("Task already in the same column.")
+    if column_id != current_column_id:
+        cursor.execute("""
+            UPDATE tasks SET column_id=?
+            WHERE project_id=? AND id=?
+            """, [column_id, current_project, taskid])
+        conn.commit()
+        print("Task moved successfully.")
     else:
-        print("Task not found.")
+        print("Task already in the same column.")
+        
         
 def do_columns(conn, cursor, tok):
     cursor.execute("""
