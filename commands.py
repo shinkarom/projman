@@ -5,17 +5,21 @@ current_project = 1
 def validate_column_id(cursor, value):
     valid_ids = [row[0] for row in cursor.execute("SELECT id FROM columns WHERE project_id = ?", [current_project])]
     return value in valid_ids
+    
+def validate_task_id(cursor, value):
+    valid_ids = [row[0] for row in cursor.execute("SELECT id FROM tasks WHERE project_id = ?", [current_project])]
+    return value in valid_ids
 
 def do_help(conn, cursor, tok):
     print("""
     help: show this help
     exit: exit from program
     show [column_id]: show the task list
-    add [column_id] [name]: add a task with the name to the colum
-    delete [task_id]: delete a task
-    move [task_id] [column_id]: move a task to a column
-    columns: list the columns
-    projects: list the projects
+    t a [column_id] [name]: add a task with the name to the colum
+    t d [task_id]: delete a task
+    t m [task_id] [column_id]: move a task to a column
+    c: list the columns
+    p: list the projects
     """)
 
 def do_show(conn, cursor, tok):
@@ -39,7 +43,7 @@ def do_show(conn, cursor, tok):
           # Access the column name
         print(f"{r}\t{n}")
 
-def do_add(conn, cursor, tok):
+def do_task_add(conn, cursor, tok):
     column_id = tok.require_int()
     if column_id == None: return    
     s = tok.get_string()
@@ -68,15 +72,14 @@ def do_add(conn, cursor, tok):
     print(f"Added task with id {newid} to column {column_id}")
     
 
-def do_move(conn, cursor, tok):
+def do_task_move(conn, cursor, tok):
     taskid = tok.require_int()
     if taskid == None: return
     column_id = tok.require_int()
     if column_id == None: return
-    cursor.execute("SELECT 1 FROM tasks WHERE id = ? AND project_id = ?", (taskid, current_project))
-    task_exists = cursor.fetchone()!=None  # True if task exists, False otherwise
-    if not task_exists:
-        print("No such task.")
+    
+    if not validate_task_id(cursor, taskid):
+        print("Error: no such task")
         return
         
     if not validate_column_id(cursor, column_id):
@@ -124,13 +127,15 @@ def do_projects(conn, cursor, tok):
         n = row["name"]
         print(f"{i}\t{n}")
     
-def do_delete(conn, cursor, tok):
+def do_task_delete(conn, cursor, tok):
     taskid = tok.require_int()
     if taskid == None: return
-    cursor.execute("DELETE FROM tasks WHERE id = ? AND project_id = ? RETURNING id", [taskid, current_project])
-    delid = cursor.fetchone()
-    if delid:
-        print("Deleted the task.")
-    else:
-        print("No task with this id.")
+    
+    if not validate_task_id(cursor, taskid):
+        print("Error: no such task")
+        return
+    
+    cursor.execute("DELETE FROM tasks WHERE id = ? AND project_id = ?", [taskid, current_project])
     conn.commit()
+    print("Task deleted.")
+    

@@ -76,16 +76,30 @@ if __name__ == '__main__':
             do_help(conn, cursor, tok)
         elif first_token == "show":
             do_show(conn, cursor, tok)
-        elif first_token == "add":
-            do_add(conn, cursor, tok)
-        elif first_token == "columns":
-            do_columns(conn, cursor, tok)
-        elif first_token == "projects":
-            do_projects(conn, cursor, tok)
-        elif first_token == "delete":
-            do_delete(conn, cursor, tok)
-        elif first_token == "move":
-            do_move(conn, cursor, tok)
+        elif first_token == "c":
+            match tok.require_word():
+                case None:
+                    print("Error: wrong command")
+                case "":
+                    do_columns(conn, cursor, tok)
+        elif first_token == "t":
+            match tok.require_word():
+                case None:
+                    print("Error: wrong command")
+                case "":
+                    print("Error: wrong command")
+                case "a":
+                    do_task_add(conn, cursor, tok)
+                case "m":
+                    do_task_move(conn, cursor, tok)
+                case "d":
+                    do_task_delete(conn, cursor, tok)
+        elif first_token == "p":
+            match tok.require_word():
+                case None:
+                    print("Error: wrong command")
+                case "":
+                    do_projects(conn, cursor, tok)
         else:
             print("Unknown command. Enter 'help' for help or 'exit' to exit the program.")
         print()
