@@ -1,14 +1,21 @@
 import sqlite3
 
-current_project = 1
+import common
 
 def validate_column_id(cursor, value):
-    valid_ids = [row[0] for row in cursor.execute("SELECT id FROM columns WHERE project_id = ?", [current_project])]
-    return value in valid_ids
+    cursor.execute("SELECT EXISTS(SELECT 1 FROM columns WHERE id = ? ANd project_id = ?)", [value, common.current_project])
+    exists = cursor.fetchone()[0]
+    return exists
     
 def validate_task_id(cursor, value):
-    valid_ids = [row[0] for row in cursor.execute("SELECT id FROM tasks WHERE project_id = ?", [current_project])]
-    return value in valid_ids
+    cursor.execute("SELECT EXISTS(SELECT 1 FROM tasks WHERE id = ? AND project_id = ?)", [value, common.current_project])
+    exists = cursor.fetchone()[0]
+    return exists
+    
+def validate_project_id(cursor, value):
+    cursor.execute("SELECT EXISTS(SELECT 1 FROM projects WHERE id = ?)", [value])
+    exists = cursor.fetchone()[0]
+    return exists
 
 def do_help(conn, cursor, tok):
     print("""
@@ -22,10 +29,10 @@ def do_help(conn, cursor, tok):
     p: list the projects
     """)
 
-def do_show(conn, cursor, tok):
+def do_column_show(conn, cursor, tok):
     colnum = tok.require_int()
     if colnum == None: return
-    cursor.execute("SELECT name FROM columns WHERE project_id=? AND id=?", [current_project,colnum])
+    cursor.execute("SELECT name FROM columns WHERE project_id=? AND id=?", [common.current_project,colnum])
     colname = cursor.fetchone()
     column_name = " ("+colname["name"]+")" if colname!=None else ""
     cursor.execute(
@@ -33,7 +40,7 @@ def do_show(conn, cursor, tok):
         " FROM tasks AS t"
         " LEFT JOIN columns AS c ON t.column_id = c.id AND c.project_id = ?"
         " WHERE t.column_id = ?",
-        (current_project, colnum)
+        (common.current_project, colnum)
     )
     tasks = cursor.fetchall()
     print(f"Column {colnum}{column_name}: {len(tasks)}")
@@ -55,7 +62,7 @@ def do_task_add(conn, cursor, tok):
         print("Error: wrong column")
         return
       
-    cursor.execute("SELECT id FROM tasks WHERE project_id=? ORDER BY id ASC", [current_project])
+    cursor.execute("SELECT id FROM tasks WHERE project_id=? ORDER BY id ASC", [common.current_project])
     ids = cursor.fetchall()
     next_id = 1  # Start with 1 as the default
     if ids:
@@ -66,7 +73,7 @@ def do_task_add(conn, cursor, tok):
         if index == len(ids) - 1:  # No gaps found, use the next number after the last ID
             next_id = ids[-1][0] + 1
     
-    cursor.execute("INSERT INTO tasks(id, project_id, name, column_id) VALUES (?, ?, ?, ?)", [next_id, current_project, s, column_id])
+    cursor.execute("INSERT INTO tasks(id, project_id, name, column_id) VALUES (?, ?, ?, ?)", [next_id, common.current_project, s, column_id])
     conn.commit()
     newid = cursor.lastrowid
     print(f"Added task with id {newid} to column {column_id}")
@@ -94,7 +101,7 @@ def do_task_move(conn, cursor, tok):
         cursor.execute("""
             UPDATE tasks SET column_id=?
             WHERE project_id=? AND id=?
-            """, [column_id, current_project, taskid])
+            """, [column_id, common.current_project, taskid])
         conn.commit()
         print("Task moved successfully.")
     else:
@@ -108,7 +115,7 @@ def do_columns(conn, cursor, tok):
         FROM columns c
         WHERE c.project_id = ?;
         """,
-        (current_project,)
+        (common.current_project,)
     )
 
     results = cursor.fetchall()
@@ -135,7 +142,77 @@ def do_task_delete(conn, cursor, tok):
         print("Error: no such task")
         return
     
-    cursor.execute("DELETE FROM tasks WHERE id = ? AND project_id = ?", [taskid, current_project])
+    cursor.execute("DELETE FROM tasks WHERE id = ? AND project_id = ?", [taskid, common.current_project])
     conn.commit()
     print("Task deleted.")
     
+    
+def do_project_add(conn, cursor, tok):  
+    s = tok.get_string()
+    if s == "":
+        print("String must not be empty")
+        return
+      
+    cursor.execute("SELECT id FROM projects ORDER BY id ASC")
+    ids = cursor.fetchall()
+    next_id = 1  # Start with 1 as the default
+    if ids:
+        for index, (current_id,) in enumerate(ids):
+            if current_id != next_id:  # Gap found
+                break
+            next_id += 1
+        if index == len(ids) - 1:  # No gaps found, use the next number after the last ID
+            next_id = ids[-1][0] + 1
+    
+    cursor.execute("INSERT INTO projects(id, name) VALUES (?, ?)", [next_id, s])
+    conn.commit()
+    newid = cursor.lastrowid
+    print(f"Added project with id {newid}")
+    
+def do_project_delete(conn, cursor, tok):
+    projid = tok.require_int()
+    if projid == None: return
+    
+    if not validate_project_id(cursor, projid):
+        print("Error: no such project")
+        return
+    
+    if projid == common.current_project:
+        print("Error: can't delete active project")
+        return
+    
+    cursor.execute("DELETE FROM projects WHERE id = ?", [projid])
+    conn.commit()
+    print("Project deleted.")
+    
+def do_project_rename(conn, cursor, tok):
+    projid = tok.require_int()
+    if projid == None: return
+    
+    if not validate_project_id(cursor, projid):
+        print("Error: no such project")
+        return
+        
+    s = tok.get_string()
+    if s == "":
+        print("String must not be empty")
+        return
+    
+    cursor.execute("UPDATE projects SET name = ? WHERE id = ?", [s, projid])
+    conn.commit()
+    print("Project renamed.")
+    
+def do_project_switch(conn, cursor, tok):
+    projid = tok.require_int()
+    if projid == None: return
+    
+    if not validate_project_id(cursor, projid):
+        print("Error: no such project")
+        return
+        
+    if projid == common.current_project:
+        print("Error: can't switch to active project")
+        return
+        
+    common.set_current_project(projid, cursor)
+    print(f"Project switched to {common.current_project}")
