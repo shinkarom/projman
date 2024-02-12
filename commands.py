@@ -21,16 +21,21 @@ def do_help(conn, cursor, tok):
     print("""
     help: show this help
     exit: exit from program
-    show [column_id]: show the task list
+    c: list the columns
+    c s [column_id]: show the column with the number
+    p: list the projects
+    p a [name]: add a project with the name
+    p d [id]: delete project with id
+    p r [id]: rename the project with id
+    p sw [id]: switch to the project with id
     t a [column_id] [name]: add a task with the name to the colum
     t d [task_id]: delete a task
     t m [task_id] [column_id]: move a task to a column
-    c: list the columns
-    p: list the projects
     """)
 
 def do_column_show(conn, cursor, tok):
     colnum = tok.require_int()
+    print(colnum)
     if colnum == None: return
     cursor.execute("SELECT name FROM columns WHERE project_id=? AND id=?", [common.current_project,colnum])
     colname = cursor.fetchone()
@@ -164,9 +169,7 @@ def do_project_add(conn, cursor, tok):
         if index == len(ids) - 1:  # No gaps found, use the next number after the last ID
             next_id = ids[-1][0] + 1
     
-    cursor.execute("INSERT INTO projects(id, name) VALUES (?, ?)", [next_id, s])
-    conn.commit()
-    newid = cursor.lastrowid
+    newid = common.add_project(conn, cursor, s)
     print(f"Added project with id {newid}")
     
 def do_project_delete(conn, cursor, tok):

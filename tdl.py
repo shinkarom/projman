@@ -16,7 +16,7 @@ if __name__ == '__main__':
     cursor.executescript('''     
         -- Create the projects table
         CREATE TABLE IF NOT EXISTS projects (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          id INTEGER,
           name TEXT NOT NULL
         );
 
@@ -29,7 +29,7 @@ if __name__ == '__main__':
 
         -- Create the tasks table
         CREATE TABLE IF NOT EXISTS tasks (
-          id INTEGER PRIMARY KEY,
+          id INTEGER,
           name TEXT NOT NULL,
           description TEXT, -- Optional field for longer descriptions
           project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -42,23 +42,9 @@ if __name__ == '__main__':
     project_count = cursor.fetchone()["COUNT(*)"]
 
     if project_count == 0:
-        # No projects exist, add a default project
-        cursor.execute("INSERT INTO projects(name) VALUES (?)", ("Default",))
-        conn.commit()
+        common.add_project(conn, cursor, "")
     
     common.set_current_project(1, cursor)
-    
-    cursor.execute("SELECT COUNT(*) FROM columns WHERE project_id = ?", [common.current_project])
-    column_count = cursor.fetchone()[0]
-
-    if column_count == 0:
-        default_columns = [
-            ("To Do",common.current_project, 1), 
-            ("In Progress",common.current_project, 2), 
-            ("Done",common.current_project, 3)
-        ]
-        cursor.executemany("INSERT INTO columns(name, project_id, id) VALUES (?, ?, ?)", default_columns)
-        conn.commit()
     
     print("Enter 'help' for help or 'exit' to exit the program.")
     while True:
@@ -78,11 +64,11 @@ if __name__ == '__main__':
                     do_columns(conn, cursor, tok)
                 case "s":
                     do_column_show(conn, cursor, tok)
+                case _:
+                    print("Error: wrong command")    
         elif first_token == "t":
             match tok.require_word():
-                case None:
-                    print("Error: wrong command")
-                case "":
+                case None | "":
                     print("Error: wrong command")
                 case "a":
                     do_task_add(conn, cursor, tok)
@@ -90,6 +76,8 @@ if __name__ == '__main__':
                     do_task_move(conn, cursor, tok)
                 case "d":
                     do_task_delete(conn, cursor, tok)
+                case _:
+                    print("Error: wrong command")
         elif first_token == "p":
             match tok.require_word():
                 case None:
@@ -104,6 +92,8 @@ if __name__ == '__main__':
                     do_project_rename(conn, cursor, tok)
                 case "sw":
                     do_project_switch(conn, cursor, tok)
+                case _:
+                    print("Error: wrong command")
         else:
             print("Unknown command. Enter 'help' for help or 'exit' to exit the program.")
         print()
