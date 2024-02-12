@@ -62,6 +62,8 @@ if __name__ == '__main__':
                     print("Error: wrong command")
                 case "":
                     do_columns(conn, cursor, tok)
+                case "a":
+                    do_column_add(conn, cursor, tok)
                 case "s":
                     do_column_show(conn, cursor, tok)
                 case _:

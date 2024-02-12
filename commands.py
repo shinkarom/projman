@@ -22,6 +22,7 @@ def do_help(conn, cursor, tok):
     help: show this help
     exit: exit from program
     c: list the columns
+    c a [name]: add a column
     c s [column_id]: show the column with the number
     p: list the projects
     p a [name]: add a project with the name
@@ -54,6 +55,28 @@ def do_column_show(conn, cursor, tok):
         n = t["name"]
           # Access the column name
         print(f"{r}\t{n}")
+
+def do_column_add(conn, cursor, tok):
+    s = tok.get_string()
+    if s == "":
+        print("String must not be empty")
+        return
+    
+    cursor.execute("SELECT id FROM columns WHERE project_id=? ORDER BY id ASC", [common.current_project])
+    ids = cursor.fetchall()
+    next_id = 1  # Start with 1 as the default
+    if ids:
+        for index, (current_id,) in enumerate(ids):
+            if current_id != next_id:  # Gap found
+                break
+            next_id += 1
+        if index == len(ids) - 1:  # No gaps found, use the next number after the last ID
+            next_id = ids[-1][0] + 1    
+            
+    cursor.execute("INSERT INTO columns(project_id,id,name) VALUES(?,?,?)",[common.current_project, next_id, s])
+    conn.commit()
+    print("Column added with id",next_id)
+    
 
 def do_task_add(conn, cursor, tok):
     column_id = tok.require_int()
