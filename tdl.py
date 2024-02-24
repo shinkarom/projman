@@ -64,8 +64,12 @@ if __name__ == '__main__':
                     do_columns(conn, cursor, tok)
                 case "a":
                     do_column_add(conn, cursor, tok)
+                case "r":
+                    do_column_rename(conn, cursor, tok)
                 case "s":
                     do_column_show(conn, cursor, tok)
+                case "d":
+                    do_column_delete(conn, cursor, tok)
                 case _:
                     print("Error: wrong command")    
         elif first_token == "t":

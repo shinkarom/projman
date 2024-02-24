@@ -24,6 +24,7 @@ def do_help(conn, cursor, tok):
     c: list the columns
     c a [name]: add a column
     c s [column_id]: show the column with the number
+    c d [colum_id]: delete column with id
     p: list the projects
     p a [name]: add a project with the name
     p d [id]: delete project with id
@@ -76,7 +77,29 @@ def do_column_add(conn, cursor, tok):
     cursor.execute("INSERT INTO columns(project_id,id,name) VALUES(?,?,?)",[common.current_project, next_id, s])
     conn.commit()
     print("Column added with id",next_id)
+
+def do_column_rename(conn, cursor, tok):
+    column_id = tok.require_int()
+    if column_id == None: return 
+    s = tok.get_string()
+    if s == "":
+        print("String must not be empty")
+        return
     
+    cursor.execute("UPDATE columns SET name = ? WHERE id = ? AND project_id=?", [s, column_id, common.current_project])
+    conn.commit()
+    print("Project renamed.")
+
+def do_column_delete(conn, cursor, tok):
+    column_id = tok.require_int()
+    if column_id == None: return 
+    if not validate_column_id(cursor, column_id):
+        print("Error: wrong column")
+        return
+    
+    cursor.execute("DELETE FROM columns WHERE id=? AND project_id=?", [column_id, common.current_project])
+    conn.commit()
+    print("Column deleted.")
 
 def do_task_add(conn, cursor, tok):
     column_id = tok.require_int()
